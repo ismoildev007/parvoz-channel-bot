@@ -14,6 +14,11 @@ class ContestSetting extends Model
         'status',
     ];
 
+    protected $casts = [
+        'start_date' => 'datetime',
+        'end_date' => 'datetime',
+    ];
+
     public function channels()
     {
         return $this->belongsToMany(Channel::class, 'contest_channel', 'contest_setting_id', 'channel_id');

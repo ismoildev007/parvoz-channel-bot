@@ -15,8 +15,8 @@
         <div class="grid grid-cols-1 gap-4">
             <input type="text" name="name" value="{{ $contest->name }}" placeholder="Konkurs nomi" class="border p-2" required>
             <textarea name="description" placeholder="Konkurs shartlari" class="border p-2">{{ $contest->description }}</textarea>
-            <input type="datetime-local" name="start_date" value="{{ $contest->start_date->format('Y-m-d\TH:i') }}" class="border p-2" required>
-            <input type="datetime-local" name="end_date" value="{{ $contest->end_date->format('Y-m-d\TH:i') }}" class="border p-2" required>
+            <input type="datetime-local" name="start_date" value="{{ \Carbon\Carbon::parse($contest->start_date)->format('Y-m-d\TH:i') }}" class="border p-2" required>
+            <input type="datetime-local" name="end_date" value="{{ \Carbon\Carbon::parse($contest->end_date)->format('Y-m-d\TH:i') }}" class="border p-2" required>
             <select name="status" class="border p-2">
                 <option value="active" {{ $contest->status == 'active' ? 'selected' : '' }}>Faol</option>
                 <option value="finished" {{ $contest->status == 'finished' ? 'selected' : '' }}>Tugallangan</option>
@@ -66,7 +66,7 @@
     <ul>
         @foreach ($contest->prizes as $prize)
             <li class="mb-2">
-                {{ $prise->position }}-o‘rin: {{ $prize->name }}
+                {{ $prize->position }}-o‘rin: {{ $prize->name }}
                 <form action="{{ route('admin.prize.remove', [$contest->id, $prize->id]) }}" method="POST" class="inline">
                     @csrf
                     @method('DELETE')

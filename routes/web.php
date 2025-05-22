@@ -1,11 +1,13 @@
 <?php
 
+use App\Http\Controllers\ChannelController;
+use App\Http\Controllers\StudentController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AdminController;
 
 
 Route::get('/', function () {
-    return view('welcome');
+    return redirect()->route('admin.index');
 });
 
 Route::get('/admin', [AdminController::class, 'index'])->name('admin.index');
@@ -18,3 +20,10 @@ Route::post('/admin/contest/{contest}/prize', [AdminController::class, 'addPrize
 Route::delete('/admin/contest/{contest}/prize/{prize}', [AdminController::class, 'removePrize'])->name('admin.prize.remove');
 Route::get('/admin/contest/{contest}/statistics', [AdminController::class, 'statistics'])->name('admin.statistics');
 Route::get('/admin/contest/{contest}/winners', [AdminController::class, 'winners'])->name('admin.winners');
+
+Route::get('/channels/create', [ChannelController::class, 'create'])->name('channels.create');
+Route::post('/channels', [ChannelController::class, 'store'])->name('channels.store');
+Route::get('/students', [StudentController::class, 'index'])->name('students.index');
+Route::get('/students/create', [StudentController::class, 'create'])->name('students.create');
+Route::post('/students', [StudentController::class, 'store'])->name('students.store');
+Route::delete('/students/{student}', [StudentController::class, 'destroyStudent'])->name('students.destroy');

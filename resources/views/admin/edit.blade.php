@@ -29,7 +29,6 @@
     <form action="{{ route('admin.channel.add', $contest->id) }}" method="POST" class="mb-8">
         @csrf
         <div class="grid grid-cols-1 gap-4">
-            <input type="text" name="telegram_id" placeholder="Kanal Telegram ID" class="border p-2" required>
             <input type="text" name="name" placeholder="Kanal nomi" class="border p-2" required>
             <input type="url" name="invite_link" placeholder="Kanal havolasi" class="border p-2" required>
             <button type="submit" class="bg-blue-500 text-white p-2 rounded">Kanal qo‘shish</button>

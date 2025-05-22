@@ -31,8 +31,8 @@
                 <p>Holati: {{ $contest->status }}</p>
                 <div class="mt-2">
                     <a href="{{ route('admin.contest.edit', $contest->id) }}" class="text-blue-500">Tahrirlash</a>
-                    <a href="{{ route('admin.statistics', $contest->id) }}" class="text-green-500 ml-4">Statistika</a>
-                    <a href="{{ route('admin.winners', $contest->id) }}" class="text-purple-500 ml-4">G'oliblar</a>
+                    <a href="{{ route('students.index') }}" class="text-green-500 ml-4">studentlar</a>
+{{--                    <a href="{{ route('admin.winners', $contest->id) }}" class="text-purple-500 ml-4">G'oliblar</a>--}}
                 </div>
             </div>
         @endforeach

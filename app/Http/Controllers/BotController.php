@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\Channel;
 use App\Models\ChannelMember;
 use App\Models\ContestSetting;
+use App\Models\Student;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -16,13 +17,22 @@ class BotController extends Controller
 
     public function __construct()
     {
-        $this->telegram = new Api(env('TELEGRAM_BOT_TOKEN'));
+        $token = env('TELEGRAM_BOT_TOKEN');
+        if (!$token) {
+            Log::error("TELEGRAM_BOT_TOKEN is not set in .env file.");
+            throw new \Exception("Telegram bot token is missing.");
+        }
+        $this->telegram = new Api($token);
     }
 
     public function handleWebhook(Request $request)
     {
         try {
             $update = $this->telegram->getWebhookUpdate();
+            if (!$update) {
+                Log::warning("No valid webhook update received.");
+                return response()->json(['status' => 'ok']);
+            }
 
             // Callback queryni qayta ishlash
             if ($update->getCallbackQuery()) {
@@ -32,6 +42,7 @@ class BotController extends Controller
 
             $message = $update->getMessage();
             if (!$message) {
+                Log::warning("No message found in webhook update.");
                 return response()->json(['status' => 'ok']);
             }
 
@@ -42,54 +53,11 @@ class BotController extends Controller
             // Foydalanuvchini ro'yxatdan o'tkazish
             $dbUser = User::firstOrCreate(
                 ['telegram_id' => $user->getId()],
-                [
-                    'first_name' => $user->getFirstName(),
-                    'referral_link' => $this->generateReferralLink($user->getId())
-                ]
+                ['first_name' => $user->getFirstName()]
             );
 
-            // Referal ID ni saqlash
-            if (strpos($text, '/start ref_') === 0) {
-                $referrerTelegramId = str_replace('/start ref_', '', $text);
-                $referrer = User::where('telegram_id', $referrerTelegramId)->first();
-                if ($referrer && $referrer->telegram_id != $dbUser->telegram_id) {
-                    $dbUser->referred_by = $referrer->id; // users.id ga ishora qiladi
-                    $dbUser->save();
-                    $this->telegram->sendMessage([
-                        'chat_id' => $chatId,
-                        'text' => "Siz {$referrer->first_name} tomonidan taklif qilindingiz! Ro'yxatdan o'tishni davom ettiring.",
-                    ]);
-                } else {
-                    $this->telegram->sendMessage([
-                        'chat_id' => $chatId,
-                        'text' => "Noto'g'ri referal havola. Iltimos, oddiy /start buyrug'ini ishlatib ro'yxatdan o'ting.",
-                    ]);
-                }
-            }
-
-            // Contact ma'lumotlarini qabul qilish
-            if ($message->getContact()) {
-                $phoneNumber = $message->getContact()->getPhoneNumber();
-                if (!$dbUser->phone_number) {
-                    $dbUser->phone_number = $phoneNumber;
-                    $dbUser->save();
-                    $this->telegram->sendMessage([
-                        'chat_id' => $chatId,
-                        'text' => 'Telefon raqamingiz muvaffaqiyatli saqlandi! Endi kanal(lar)ga aʼzo boʼling.',
-                    ]);
-                    $this->sendChannelList($chatId, $dbUser);
-                } else {
-                    $this->telegram->sendMessage([
-                        'chat_id' => $chatId,
-                        'text' => 'Sizning telefon raqamingiz allaqachon saqlangan! Kanal(lar)ga aʼzo boʼling.',
-                    ]);
-                    $this->sendChannelList($chatId, $dbUser);
-                }
-                return response()->json(['status' => 'ok']);
-            }
-
             // Buyruqlarni qayta ishlash
-            if ($text === '/start' || strpos($text, '/start ref_') === 0) {
+            if ($text === '/start') {
                 // Konkurs faol ekanligini tekshirish
                 $activeContest = ContestSetting::where('status', 'active')
                     ->where('end_date', '>=', now())
@@ -102,150 +70,139 @@ class BotController extends Controller
                     return response()->json(['status' => 'ok']);
                 }
 
-                // Telefon raqami mavjudligini tekshirish
-                if (!$dbUser->phone_number) {
-                    $this->requestPhoneNumber($chatId);
-                } else {
-                    $this->sendChannelList($chatId, $dbUser);
-                }
-            } elseif ($text === '/stats') {
-                $this->sendStats($chatId, $dbUser);
-            } elseif ($text === '/register') {
-                if ($dbUser->phone_number) {
-                    $this->telegram->sendMessage([
-                        'chat_id' => $chatId,
-                        'text' => 'Siz allaqachon roʼyxatdan oʼtgansiz! Kanal(lar)ga aʼzo boʼling.',
-                    ]);
-                    $this->sendChannelList($chatId, $dbUser);
-                } else {
-                    $this->requestPhoneNumber($chatId);
-                }
+                // Faqat kanallar ro'yxatini yuborish
+                $this->sendChannelList($chatId, $dbUser);
+            } elseif ($text === 'Sovrin egalari') {
+                // Sovrin egalari ro'yxatini yuborish
+                $this->sendPrizeWinners($chatId);
             }
 
             return response()->json(['status' => 'ok']);
         } catch (\Exception $e) {
             Log::error("Webhook error: {$e->getMessage()}");
-            $this->telegram->sendMessage([
-                'chat_id' => $chatId,
-                'text' => 'Xatolik yuz berdi. Iltimos, qaytadan urinib koʼring.',
-            ]);
+            if (isset($chatId)) {
+                $this->telegram->sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => 'Xatolik yuz berdi. Iltimos, qaytadan urinib koʼring.',
+                ]);
+            }
             return response()->json(['status' => 'error']);
         }
     }
 
-        protected function handleCallbackQuery($callbackQuery)
-        {
-            $chatId = $callbackQuery->getMessage()->getChat()->getId();
-            $userId = $callbackQuery->getFrom()->getId();
-            $data = $callbackQuery->getData();
+    protected function handleCallbackQuery($callbackQuery)
+    {
+        $chatId = $callbackQuery->getMessage()->getChat()->getId();
+        $userId = $callbackQuery->getFrom()->getId();
+        $data = $callbackQuery->getData();
 
-            if ($data === 'check_membership') {
-                $user = User::where('telegram_id', $userId)->first();
-                if (!$user->phone_number) {
-                    $this->telegram->sendMessage([
-                        'chat_id' => $chatId,
-                        'text' => 'Iltimos, avval telefon raqamingizni ulashing.',
-                    ]);
-                    $this->requestPhoneNumber($chatId);
-                    $this->telegram->answerCallbackQuery([
-                        'callback_query_id' => $callbackQuery->getId(),
-                    ]);
-                    return;
-                }
+        if ($data === 'check_membership') {
+            $user = User::where('telegram_id', $userId)->first();
 
-                // Faol konkursni olish
-                $activeContest = ContestSetting::where('status', 'active')
-                    ->where('end_date', '>=', now())
-                    ->first();
+            // Faol konkursni olish
+            $activeContest = ContestSetting::where('status', 'active')
+                ->where('end_date', '>=', now())
+                ->first();
 
-                if (!$activeContest) {
-                    $this->telegram->sendMessage([
-                        'chat_id' => $chatId,
-                        'text' => 'Hozirda faol konkurs mavjud emas.',
-                    ]);
-                    $this->telegram->answerCallbackQuery([
-                        'callback_query_id' => $callbackQuery->getId(),
-                    ]);
-                    return;
-                }
+            if (!$activeContest) {
+                $this->telegram->sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => 'Hozirda faol konkurs mavjud emas.',
+                ]);
+                $this->telegram->answerCallbackQuery([
+                    'callback_query_id' => $callbackQuery->getId(),
+                ]);
+                return;
+            }
 
-                // Faol konkursga bog'liq kanallarni olish
-                $channels = $activeContest->channels;
-                if ($channels->isEmpty()) {
-                    $this->telegram->sendMessage([
-                        'chat_id' => $chatId,
-                        'text' => 'Hozirda aʼzo boʼlish kerak boʼlgan kanal mavjud emas.',
-                    ]);
-                    $this->telegram->answerCallbackQuery([
-                        'callback_query_id' => $callbackQuery->getId(),
-                    ]);
-                    return;
-                }
+            // Faol konkursga bog'liq kanallarni olish
+            $channels = $activeContest->channels;
+            if ($channels->isEmpty()) {
+                $this->telegram->sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => 'Hozirda aʼzo boʼlish kerak boʼlgan kanal mavjud emas.',
+                ]);
+                $this->telegram->answerCallbackQuery([
+                    'callback_query_id' => $callbackQuery->getId(),
+                ]);
+                return;
+            }
 
-                $allChannelsJoined = true;
-                $newMembership = false;
+            $allChannelsJoined = true;
 
-                foreach ($channels as $channel) {
-                    try {
-                        $member = $this->telegram->getChatMember([
-                            'chat_id' => $channel->telegram_id,
-                            'user_id' => $userId,
+            foreach ($channels as $channel) {
+                try {
+                    $member = $this->telegram->getChatMember([
+                        'chat_id' => $channel->telegram_id,
+                        'user_id' => $userId,
+                    ]);
+
+                    if (in_array($member['status'], ['member', 'administrator', 'creator'])) {
+                        // Kanal a'zoligini saqlash
+                        ChannelMember::firstOrCreate([
+                            'user_id' => $user->id,
+                            'channel_id' => $channel->id,
                         ]);
-
-                        if (in_array($member['status'], ['member', 'administrator', 'creator'])) {
-                            // Kanal a'zoligini saqlash
-                            $channelMember = ChannelMember::firstOrCreate([
-                                'user_id' => $user->id,
-                                'channel_id' => $channel->id,
-                            ]);
-                            if ($channelMember->wasRecentlyCreated) {
-                                $newMembership = true; // Yangi a'zolik qo'shildi
-                            }
-                        } else {
-                            $allChannelsJoined = false;
-                        }
-                    } catch (\Exception $e) {
-                        Log::error("Error checking membership for user {$userId} in channel {$channel->telegram_id}: {$e->getMessage()}");
+                    } else {
                         $allChannelsJoined = false;
                     }
+                } catch (\Exception $e) {
+                    Log::error("Error checking membership for user {$userId} in channel {$channel->telegram_id}: {$e->getMessage()}");
+                    $allChannelsJoined = false;
                 }
+            }
 
-                if ($allChannelsJoined) {
-                    // Barcha kanallarga a'zo bo'lganini tekshirish
-                    $channelCount = $channels->count();
-                    $userChannelCount = ChannelMember::where('user_id', $user->id)
-                        ->whereIn('channel_id', $channels->pluck('id'))
-                        ->count();
+            if ($allChannelsJoined) {
+                $this->sendStudentList($chatId, $user);
+            } else {
+                $this->telegram->sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => "Iltimos, barcha kanal(lar)ga a'zo bo'ling va qayta urinib ko'ring.",
+                ]);
+                $this->sendChannelList($chatId, $user);
+            }
 
-                    // Agar foydalanuvchi barcha kanallarga a'zo bo'lgan bo'lsa va yangi a'zolik qo'shilgan bo'lsa
-                    if ($userChannelCount >= $channelCount && $newMembership && $user->referred_by) {
-                        $referrer = User::find($user->referred_by);
-                        if ($referrer) {
-                            $referrer->increment('points');
-                            $this->telegram->sendMessage([
-                                'chat_id' => $referrer->telegram_id,
-                                'text' => "Sizning referalingiz {$user->first_name} barcha kanallarga qo'shildi! +1 ball.",
-                            ]);
-                        }
-                    }
+            $this->telegram->answerCallbackQuery([
+                'callback_query_id' => $callbackQuery->getId(),
+            ]);
+        } elseif (strpos($data, 'vote_student_') === 0) {
+            $studentId = str_replace('vote_student_', '', $data);
+            $user = User::where('telegram_id', $userId)->first();
+
+            if ($user->voted_student_id) {
+                $this->telegram->sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => 'Siz allaqachon bir studentga ovoz bergansiz. Faqat bitta ovoz berish mumkin.',
+                ]);
+            } else {
+                $student = Student::find($studentId);
+                if ($student) {
+                    $student->increment('votes');
+                    $user->voted_student_id = $studentId;
+                    $user->save();
 
                     $this->telegram->sendMessage([
                         'chat_id' => $chatId,
-                        'text' => "Tabriklaymiz! Siz barcha kanal(lar)ga a'zo bo'ldingiz.\nSizning referal havolangiz: {$user->referral_link}",
+                        'text' => "Siz {$student->first_name} {$student->last_name} ga ovoz berdingiz! Ovozlar soni: {$student->votes}",
                     ]);
                 } else {
                     $this->telegram->sendMessage([
                         'chat_id' => $chatId,
-                        'text' => "Iltimos, barcha kanal(lar)ga a'zo bo'ling va qayta urinib ko'ring.",
+                        'text' => 'Student topilmadi. Iltimos, qaytadan urinib ko‘ring.',
                     ]);
-                    $this->sendChannelList($chatId, $user);
                 }
-
-                $this->telegram->answerCallbackQuery([
-                    'callback_query_id' => $callbackQuery->getId(),
-                ]);
             }
+
+            $this->telegram->answerCallbackQuery([
+                'callback_query_id' => $callbackQuery->getId(),
+            ]);
+        } elseif ($data === 'refresh_list') {
+            $this->sendStudentList($chatId, User::where('telegram_id', $userId)->first());
+            $this->telegram->answerCallbackQuery([
+                'callback_query_id' => $callbackQuery->getId(),
+            ]);
         }
+    }
 
     protected function sendChannelList($chatId, $user)
     {
@@ -285,45 +242,94 @@ class BotController extends Controller
         ]);
     }
 
-    protected function requestPhoneNumber($chatId)
+    protected function sendStudentList($chatId, $user)
     {
+        $students = Student::all();
+        Log::info("Fetched students count: " . $students->count());
+
+        if ($students->isEmpty()) {
+            Log::warning("No students found in database.");
+            $this->telegram->sendMessage([
+                'chat_id' => $chatId,
+                'text' => 'Hozirda ro‘yxatda studentlar mavjud emas.',
+            ]);
+            return;
+        }
+
+        $keyboard = [];
+        foreach ($students as $student) {
+            Log::info("Adding student to keyboard: {$student->id} - {$student->first_name} {$student->last_name}");
+            $keyboard[] = [
+                [
+                    'text' => "{$student->first_name} {$student->last_name} ( {$student->votes} )",
+                    'callback_data' => "vote_student_{$student->id}"
+                ]
+            ];
+        }
+
+        // Yangilash va Sovrin egalari tugmalarini qo'shish
+        $keyboard[] = [
+            ['text' => '🔄 Yangilash', 'callback_data' => 'refresh_list'],
+        ];
+
+        Log::info("Keyboard prepared: " . json_encode($keyboard));
+
         $this->telegram->sendMessage([
             'chat_id' => $chatId,
-            'text' => 'Iltimos, telefon raqamingizni ulashish uchun quyidagi tugmani bosing.',
-            'reply_markup' => json_encode([
-                'keyboard' => [[
-                    ['text' => 'Telefon raqamini ulashish', 'request_contact' => true]
-                ]],
-                'one_time_keyboard' => true,
-                'resize_keyboard' => true,
-            ]),
+            'text' => "Quyidagi studentlardan biriga ovoz bering :",
+            'reply_markup' => json_encode(['inline_keyboard' => $keyboard]),
         ]);
     }
 
-    protected function generateReferralLink($userId)
+    protected function sendPrizeWinners($chatId)
     {
-        return "https://t.me/" . env('TELEGRAM_BOT_USERNAME') . "?start=ref_{$userId}";
-    }
+        // Faol konkursni olish
+        $activeContest = ContestSetting::where('status', 'active')
+            ->where('end_date', '>=', now())
+            ->first();
 
-    protected function sendStats($chatId, $user)
-    {
-        $referrals = User::where('referred_by', $user->id)->take(10)->get();
-        $referralsCount = User::where('referred_by', $user->id)->count();
-
-        $text = "Sizning statistikangiz:\n";
-        $text .= "Umumiy ball: {$user->points}\n";
-        $text .= "Qo'shgan foydalanuvchilar soni: {$referralsCount}\n";
-        $text .= "Referallar:\n";
-        foreach ($referrals as $ref) {
-            $text .= "- {$ref->first_name} (Ball: 1)\n";
+        if (!$activeContest) {
+            $this->telegram->sendMessage([
+                'chat_id' => $chatId,
+                'text' => 'Hozirda faol konkurs mavjud emas.',
+            ]);
+            return;
         }
-        if ($referralsCount > 10) {
-            $text .= "... va yana " . ($referralsCount - 10) . " ta referal.";
+
+        // Sovrinlarni olish (position bo'yicha tartiblangan)
+        $prizes = $activeContest->prizes()->orderBy('position')->get();
+
+        if ($prizes->isEmpty()) {
+            $this->telegram->sendMessage([
+                'chat_id' => $chatId,
+                'text' => 'Hozirda sovrinlar mavjud emas.',
+            ]);
+            return;
+        }
+
+        // Studentlarni ovozlar bo'yicha tartiblab, eng yaxshi 3 tasini olish
+        $students = Student::orderBy('votes', 'desc')->take(3)->get();
+
+        if ($students->isEmpty()) {
+            $this->telegram->sendMessage([
+                'chat_id' => $chatId,
+                'text' => 'Hozirda sovrin egalari mavjud emas.',
+            ]);
+            return;
+        }
+
+        // Xabar tayyorlash
+        $message = "🏆 Sovrin egalari:\n\n";
+        foreach ($students as $index => $student) {
+            $place = $index + 1;
+            // Mos sovrinni olish (agar mavjud bo'lsa, aks holda "Sovrin yo'q" deb ko'rsatamiz)
+            $prize = $prizes->get($index) ? $prizes->get($index)->name : 'Sovrin yo‘q';
+            $message .= "$place-o‘rin: {$student->first_name} {$student->last_name} (Sovrin: $prize, Ovozlar: {$student->votes})\n";
         }
 
         $this->telegram->sendMessage([
             'chat_id' => $chatId,
-            'text' => $text,
+            'text' => $message,
         ]);
     }
 }

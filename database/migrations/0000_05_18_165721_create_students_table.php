@@ -11,11 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('channels', function (Blueprint $table) {
+        Schema::create('students', function (Blueprint $table) {
             $table->id();
-            $table->string('telegram_id')->nullable();
-            $table->string('name');
-            $table->string('invite_link');
+            $table->string('first_name');
+            $table->string('last_name');
+            $table->string('mentor_name')->nullable();
+            $table->unsignedInteger('votes')->default(0);
             $table->timestamps();
         });
     }
@@ -25,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('channels');
+        Schema::dropIfExists('students');
     }
 };

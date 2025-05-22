@@ -13,16 +13,12 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->bigInteger('telegram_id')->unique();
+            $table->string('telegram_id')->unique();
             $table->string('first_name');
             $table->string('phone_number')->nullable();
-            $table->string('referral_link')->unique()->nullable();
-            $table->integer('points')->default(0);
-            $table->unsignedBigInteger('referred_by')->nullable();
-            $table->foreign('referred_by')->references('id')->on('users')->onDelete('set null');
-            $table->timestamp('email_verified_at')->nullable();
-            $table->rememberToken();
+            $table->unsignedBigInteger('voted_student_id')->nullable();
             $table->timestamps();
+            $table->foreign('voted_student_id')->references('id')->on('students')->onDelete('set null');
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {

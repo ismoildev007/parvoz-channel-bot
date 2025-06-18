@@ -17,7 +17,7 @@ class BotController extends Controller
 
     public function __construct()
     {
-        $token = env('TELEGRAM_BOT_TOKEN');
+        $token = '7638629069:AAHXEEL0410voDh_hcP7vO1fuIhLXM2A05U';
         if (!$token) {
             Log::error("TELEGRAM_BOT_TOKEN is not set in .env file.");
             throw new \Exception("Telegram bot token is missing.");

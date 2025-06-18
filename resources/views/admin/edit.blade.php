@@ -3,10 +3,13 @@
 <head>
     <title>Konkursni tahrirlash</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
 </head>
 <body class="bg-gray-100">
 <div class="container mx-auto p-4">
     <h1 class="text-2xl font-bold mb-4">{{ $contest->name }}</h1>
+    <a href="/admin" class="btn btn-outline-primary">Orqaga</a>
+    <a href="/students" class="btn btn-outline-info">Studentlar ro'yxati</a>
 
     <!-- Update Contest Form -->
     <form action="{{ route('admin.contest.update', $contest->id) }}" method="POST" class="mb-8">

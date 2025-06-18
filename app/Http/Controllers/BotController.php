@@ -58,7 +58,6 @@ class BotController extends Controller
 
             // Buyruqlarni qayta ishlash
             if ($text === '/start') {
-                // Konkurs faol ekanligini tekshirish
                 $activeContest = ContestSetting::where('status', 'active')
                     ->where('end_date', '>=', now())
                     ->first();
@@ -70,10 +69,8 @@ class BotController extends Controller
                     return response()->json(['status' => 'ok']);
                 }
 
-                // Faqat kanallar ro'yxatini yuborish
                 $this->sendChannelList($chatId, $dbUser);
             } elseif ($text === 'Sovrin egalari') {
-                // Sovrin egalari ro'yxatini yuborish
                 $this->sendPrizeWinners($chatId);
             }
 
@@ -244,14 +241,21 @@ class BotController extends Controller
 
     protected function sendStudentList($chatId, $user)
     {
-        $students = Student::all();
+        // Aktiv holatdagi contest_id'larni olish
+        $activeContestIds = ContestSetting::where('status', 'active')->pluck('id');
+
+        // Studentlar faqat aktiv contestga tegishli bo'lsin
+        $students = Student::whereIn('contest_id', $activeContestIds)
+            ->orderBy('votes', 'desc')
+            ->get();
+
         Log::info("Fetched students count: " . $students->count());
 
         if ($students->isEmpty()) {
-            Log::warning("No students found in database.");
+            Log::warning("No active contest students found in database.");
             $this->telegram->sendMessage([
                 'chat_id' => $chatId,
-                'text' => 'Hozirda ro‘yxatda studentlar mavjud emas.',
+                'text' => 'Hozirda faqat aktiv musobaqada studentlar mavjud emas.',
             ]);
             return;
         }
@@ -261,13 +265,13 @@ class BotController extends Controller
             Log::info("Adding student to keyboard: {$student->id} - {$student->first_name} {$student->last_name}");
             $keyboard[] = [
                 [
-                    'text' => "{$student->first_name} {$student->last_name} ( {$student->votes} )",
+                    'text' => "{$student->first_name} {$student->last_name} ({$student->votes})",
                     'callback_data' => "vote_student_{$student->id}"
                 ]
             ];
         }
 
-        // Yangilash va Sovrin egalari tugmalarini qo'shish
+        // Yangilash va Sovrin egalari tugmasini qo'shish
         $keyboard[] = [
             ['text' => '🔄 Yangilash', 'callback_data' => 'refresh_list'],
         ];
@@ -276,10 +280,11 @@ class BotController extends Controller
 
         $this->telegram->sendMessage([
             'chat_id' => $chatId,
-            'text' => "Quyidagi studentlardan biriga ovoz bering :",
+            'text' => "Quyidagi studentlardan biriga ovoz bering:",
             'reply_markup' => json_encode(['inline_keyboard' => $keyboard]),
         ]);
     }
+
 
     protected function sendPrizeWinners($chatId)
     {

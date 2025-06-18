@@ -24,6 +24,11 @@ class ContestSetting extends Model
         return $this->belongsToMany(Channel::class, 'contest_channel', 'contest_setting_id', 'channel_id');
     }
 
+    public function students()
+    {
+        return $this->hasMany(Student::class);
+    }
+
     public function prizes()
     {
         return $this->hasMany(Prize::class, 'contest_setting_id');

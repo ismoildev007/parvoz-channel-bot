@@ -10,7 +10,8 @@ class StudentController extends Controller
 {
     public function index(ContestSetting $contest)
     {
-        $students = Student::all();
+        $students = Student::orderBy('votes', 'desc')->get();
+
         return view('students.index', compact('contest', 'students'));
     }
     public function create()
@@ -27,6 +28,7 @@ class StudentController extends Controller
         ]);
 
         Student::create([
+            'contest_id' => 1,
             'first_name' => $request->first_name,
             'last_name' => $request->last_name,
             'mentor_name' => $request->mentor_name,
@@ -38,6 +40,6 @@ class StudentController extends Controller
     {
         $contest = $student->contest;
         $student->delete();
-        return redirect()->route('students', $contest)->with('success', 'Talaba o‘chirildi.');
+        return redirect()->route('students.index', $contest)->with('success', 'Talaba o‘chirildi.');
     }
 }

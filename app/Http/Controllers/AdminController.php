@@ -16,7 +16,7 @@ class AdminController extends Controller
 
     public function __construct()
     {
-        $this->telegram = new Api(env('TELEGRAM_BOT_TOKEN'));
+        $this->telegram = new Api('7638629069:AAHXEEL0410voDh_hcP7vO1fuIhLXM2A05U');
     }
     public function index()
     {

@@ -34,12 +34,13 @@
                 <td>{{ $student->last_name }}</td>
                 <td>{{ $student->mentor_name ?? 'Yo‘q' }}</td>
                 <td>{{ $student->votes }}</td>
-                <td class="p-2">
+                <td class="p-2 d-flex gap-2">
+                    <a href="{{ route('students.edit', $student) }}" class="btn btn-warning btn-sm">O‘zgartirish</a>
+
                     <form action="{{ route('students.destroy', $student) }}" method="POST" onsubmit="return confirm('O‘chirishni xohlaysizmi?')">
                         @csrf
                         @method('DELETE')
-                        <button type="submit" class="text-red-600 hover:underline">O‘chirish</button>
-                        <a href="{{ route('students.edit', $student) }}" class="text-red-600 hover:underline">O'zgartirish</a>
+                        <button type="submit" class="btn btn-danger btn-sm">O‘chirish</button>
                     </form>
                 </td>
             </tr>

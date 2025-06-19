@@ -21,6 +21,8 @@ class User extends Authenticatable
         'telegram_id',
         'first_name',
         'phone_number',
+        'role',
+        'password',
         'referral_link',
         'points',
         'referred_by',

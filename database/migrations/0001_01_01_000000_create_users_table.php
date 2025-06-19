@@ -16,6 +16,8 @@ return new class extends Migration
             $table->string('telegram_id')->unique();
             $table->string('first_name');
             $table->string('phone_number')->nullable();
+            $table->string('role')->nullable();
+            $table->string('password')->nullable();
             $table->unsignedBigInteger('voted_student_id')->nullable();
             $table->timestamps();
             $table->foreign('voted_student_id')->references('id')->on('students')->onDelete('set null');

@@ -39,6 +39,7 @@
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="text-red-600 hover:underline">O‘chirish</button>
+                        <a href="{{ route('students.edit') }}" class="text-red-600 hover:underline btn">O'zgartirish</a>
                     </form>
                 </td>
             </tr>

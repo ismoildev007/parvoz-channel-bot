@@ -36,6 +36,27 @@ class StudentController extends Controller
 
         return redirect()->route('students.index')->with('success', 'Student muvaffaqiyatli qo‘shildi!');
     }
+
+    public function edit($id)
+    {
+        $student = Student::findOrFail($id);
+        return view('students.edit', compact('student'));
+    }
+
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'votes' => 'required|integer|min:0',
+        ]);
+
+        $student = Student::findOrFail($id);
+        $student->update([
+            'votes' => $request->votes,
+        ]);
+
+        return redirect()->route('students.index')->with('success', 'Talaba ovozlari muvaffaqiyatli yangilandi!');
+    }
+
     public function destroyStudent(Student $student)
     {
         $contest = $student->contest;
